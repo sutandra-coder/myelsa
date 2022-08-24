@@ -15,7 +15,7 @@ app = Flask(__name__)
 cors = CORS(app)
 
 
-def mysql_connection():
+'''def mysql_connection():
 	connection = pymysql.connect(host='creamsonservices.com',
 	                             user='creamson_langlab',
 	                             password='Langlab@123',
@@ -28,6 +28,24 @@ def library_connection():
 	connection = pymysql.connect(host='creamsonservices.com',
 									user='creamson_langlab',
 									password='Langlab@123',
+									db='creamson_user_library',
+									charset='utf8mb4',
+									cursorclass=pymysql.cursors.DictCursor)
+	return connection'''
+
+def mysql_connection():
+	connection = pymysql.connect(host='myelsa.cdcuaa7mp0jm.us-east-2.rds.amazonaws.com',
+	                             user='admin',
+	                             password='cbdHoRPQPRfTdC0uSPLt',
+	                             db='creamson_logindb',
+	                             charset='utf8mb4',
+	                             cursorclass=pymysql.cursors.DictCursor)
+	return connection
+
+def library_connection():
+	connection = pymysql.connect(host='myelsa.cdcuaa7mp0jm.us-east-2.rds.amazonaws.com',
+									user='admin',
+									password='cbdHoRPQPRfTdC0uSPLt',
 									db='creamson_user_library',
 									charset='utf8mb4',
 									cursorclass=pymysql.cursors.DictCursor)
