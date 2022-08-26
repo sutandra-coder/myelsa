@@ -107,6 +107,29 @@ class getStudentListByInstitutionId(Resource):
 				"responseList": studentListDtls}), status.HTTP_200_OK
 
 
+@name_space.route("/getStudentListByInstitutionIdNew/<int:institution_id>")
+class getStudentListByInstitutionIdNew(Resource):
+	def get(self,institution_id):
+		connection = connect_logindb()
+		cursor = connection.cursor()
+
+		cursor.execute("""SELECT icm.`INSTITUTION_USER_ID`,`SEC` as `SECTION_NAME`,`Board` as `BOARD`,`STUDENT_ROLL_NUM`,`CLASS` as `CLASS_NAME`,`STUDENT_NAME`,
+			`STUDENT_TYPE`,`Fathers_Name` as `FATHERS_NAME`,ic.`Image_URL`,`EMAIL_ID`,`PRIMARY_CONTACT_NUMBER` FROM 
+			`institution_user_credential_master` icm INNER JOIN `student_dtls` sd 
+			on icm.`INSTITUTION_USER_ID` = sd.`INSTITUTION_USER_ID_STUDENT` 
+			and icm.`INSTITUTION_ID` = sd.`INSTITUTION_ID` INNER JOIN `institution_user_credential` ic 
+			on icm.`INSTITUTION_USER_ID` = ic.`INSTITUTION_USER_ID` WHERE icm.`INSTITUTION_ID` = %s 
+			and `INSTITUTION_USER_ROLE` = 'S1'""",(institution_id))
+
+
+		studentListDtls = cursor.fetchall()
+		cursor.close()
+		return ({"attributes": {"StatusDesc": "Student List Details",
+								"Status": "success",
+								"Institution_ID":institution_id},
+				"CLASS_DATA": studentListDtls}), status.HTTP_200_OK
+
+
 @name_space.route("/allgroup/<int:institution_id>")
 class allgroup(Resource):
 	def get(self,institution_id):
