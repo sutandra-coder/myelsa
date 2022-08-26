@@ -7,6 +7,8 @@ from flask_cors import CORS, cross_origin
 from flask import Blueprint
 from flask_restplus import Api, Resource, fields
 import requests
+import string
+import random
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -71,6 +73,18 @@ assigment_marks_model = api.model('assigment_marks_model', {
 	"studentId":fields.Integer()
 	})
 
+istitution_user_otp_model = api.model('istitution_user_otp_model', {
+	"firstName": fields.String(),
+	"generatedBy": fields.String(),
+	"institutionId": fields.Integer(),
+	"institutionUserId": fields.Integer(),
+	"institutionUserRole": fields.String(),
+	"lastName": fields.String(),
+	"mailId": fields.String(),
+	"otp": fields.Integer(),
+	"phoneNumber": fields.Integer()
+})
+
 @name_space.route("/getStudentListByInstitutionId/<int:institution_id>")
 class getStudentListByInstitutionId(Resource):
 	def get(self,institution_id):
@@ -91,6 +105,25 @@ class getStudentListByInstitutionId(Resource):
 		return ({"attributes": {"status_desc": "Student List Details",
 								"status": "success"},
 				"responseList": studentListDtls}), status.HTTP_200_OK
+
+
+@name_space.route("/allgroup/<int:institution_id>")
+class allgroup(Resource):
+	def get(self,institution_id):
+		connection = connect_logindb()
+		cursor = connection.cursor()
+
+		cursor.execute("""SELECT `Group_ID` as `groupID`,`Institution_ID` as `institutionID`,`Group_Description` as `groupDescription`,`Last_Update_ID` as `lASTUPDATEID` FROM 
+			`group_master` icm WHERE icm.`INSTITUTION_ID` = %s""",(institution_id))
+
+
+		groupList = cursor.fetchall()
+		for key,data in enumerate(groupList):	
+			groupList[key]['lASTUPDATETIMESTAMP'] = 1
+			groupList[key]['teacherId'] = 0
+
+		cursor.close()
+		return groupList
 
 
 
@@ -190,3 +223,121 @@ class InsertMarksWithStudentIdAndAssignmentId(Resource):
 		return ({"attributes": {"status_desc": "Assignment marks Details",
 								"status": "success"},
 				"responseList": details}), status.HTTP_200_OK
+
+@name_space.route("/mobileNumberValidation/<string:mobile>")
+class mobileNumberValidation(Resource):
+	def get(self,mobile):
+		connection = connect_logindb()
+		curlang = connection.cursor()
+
+		count_mobile = curlang.execute("""SELECT * FROM 
+			`institution_user_credential` WHERE `INSTITUTION_USER_NAME` = %s""",(mobile))
+
+		if count_mobile > 0:
+			user_data = curlang.fetchone()
+			return ({"attributes": {
+				    		"phoneNumber": mobile,
+				    		"status_desc": "Number fetched",
+				    		"status":"success"
+				    	},
+				    	"responseList":{"PRIMARY_CONTACT_NUMBER":user_data['PRIMARY_CONTACT_NUMBER']},
+				    	"responseList1":None,
+				    	"responseDataTO":{"responseList1":None}
+				    	 }), status.HTTP_200_OK
+		else:
+			return ({"attributes":{
+						"phoneNumber":mobile,
+						"status_desc":"Invalid Number",
+						"status":"not-found"},
+						"responseList1":None,
+						"responseDataTO":{"responseList1":None}}), status.HTTP_200_OK
+
+
+@name_space.route("/postInstitutionUserOtp")
+class postInstitutionUserOtp(Resource):
+	@api.expect(istitution_user_otp_model)
+	def post(self):
+
+		connection = connect_logindb()
+		cursor = connection.cursor()			
+		details = request.get_json()
+
+		FIRST_NAME = details.get('firstName')
+		LAST_NAME = details.get('lastName')
+		MAIL_ID = details.get('mailId')		
+		PHONE_NUMBER = details['phoneNumber']
+		GENERATED_BY = details['generatedBy']
+		INSTITUTION_ID = details['institutionId']
+		INSTITUTION_USER_ID = details['institutionUserId']
+		INSTITUTION_USER_ROLE = details['institutionUserRole']
+		Address = ''
+
+		def get_random_digits(stringLength=6):
+		    Digits = string.digits
+		    return ''.join((random.choice(Digits) for i in range(stringLength)))
+		
+		otp = get_random_digits()
+
+		otp_query = ("""INSERT INTO `institution_user_otp`(`INSTITUTION_USER_ID`,
+			`INSTITUTION_ID`,`OTP`,`INSTITUTION_USER_ROLE`,`FIRST_NAME`,`LAST_NAME`,
+			`GENERATED_BY`, `MAIL_ID`, `Address`, `PHONE_NUMBER`)  
+			VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""")
+		otpdata = cursor.execute(otp_query,(INSTITUTION_USER_ID,INSTITUTION_ID,otp,INSTITUTION_USER_ROLE,
+			FIRST_NAME,LAST_NAME,GENERATED_BY,MAIL_ID,Address,PHONE_NUMBER))
+
+		get_query = ("""SELECT *
+					FROM `institution_user_otp` WHERE `INSTITUTION_USER_ID` = %s and INSTITUTION_ID = %s and `OTP` = %s order by ID desc""")
+		get_data = (INSTITUTION_USER_ID,INSTITUTION_ID,otp)
+		count_otp = cursor.execute(get_query,get_data)
+		otp_data = cursor.fetchone()
+
+		connection.commit()
+		cursor.close()
+
+		return ({
+		    "attributes": {
+		        "otp_verfication_status": "N",
+		        "status": "success"
+		    },
+		    "responseList": [
+		        {
+		            "InstitutionUserOtp ": {
+		                "firstName": "",
+		                "generatedBy": "System",
+		                "institutionId": otp_data['INSTITUTION_ID'],
+		                "institutionUserId": otp_data['INSTITUTION_USER_ID'],
+		                "institutionUserRole": otp_data['INSTITUTION_USER_ROLE'],
+		                "lastName": "",
+		                "mailId": "",
+		                "otp": int(otp_data['OTP']),
+		                "phoneNumber": PHONE_NUMBER
+		            }
+		        }
+		    ],
+		    "responseDataTO": {}
+		}), status.HTTP_200_OK
+
+
+@name_space.route("/validateOtpByPhone/<int:oneTimePassword>/<int:phoneNumber>")
+class validateOtpByPhone(Resource):
+	def get(self,oneTimePassword,phoneNumber):
+		connection = connect_logindb()
+		curlang = connection.cursor()
+
+		get_query = ("""SELECT *
+					FROM `institution_user_otp` WHERE `OTP` = %s and PHONE_NUMBER = %s order by ID desc""")
+		get_data = (oneTimePassword,phoneNumber)
+		count_otp = curlang.execute(get_query,get_data)
+		
+
+		if count_otp > 0:
+			otp_data = curlang.fetchone()
+
+			return({"attributes":{"status":"success"},"responseList":[{"InstitutionUserOtp ":{"firstName":otp_data['FIRST_NAME'],
+				"generatedBy":otp_data['GENERATED_BY'],"institutionId":otp_data['GENERATED_BY'],
+				"institutionUserId":otp_data['INSTITUTION_USER_ID'],"institutionUserRole":otp_data['INSTITUTION_USER_ROLE']
+				,"lastName":otp_data['LAST_NAME'],"mailId":otp_data['MAIL_ID'],"otp":otp_data['OTP'],"phoneNumber":otp_data['PHONE_NUMBER']}}],"responseDataTO":{}}),status.HTTP_200_OK
+		else:
+			return({"attributes":{"status_description":"Otp Not Validated","status":"Failed!!!"},"responseDataTO":{}}),status.HTTP_200_OK
+
+
